@@ -1,6 +1,6 @@
 import torch
 import argparse
-from train import flat_accuracy, train, predict
+from train import flat_accuracy, train, predict, train_2
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
 from keras.preprocessing.sequence import pad_sequences
 import pandas as pd
@@ -11,13 +11,14 @@ import nsml
 from nsml import DATASET_PATH, DATASET_NAME
 import os
 from transformers import ElectraModel, ElectraTokenizer, ElectraForSequenceClassification, AutoTokenizer
-from util import mixup
+from util import mixup, preprocess
 import re
-from model import KRElectraClassificationModel, BertClassificationModel, BigBirdClassificationModel, KRElectraLstmClassifier, BertLstmClassifier, BigBirdLstmClassifier
+from model import KRElectraLstmCnn2, BertLstmCNN,BertLstmCNN2, KrelectraLstmCNN, KRElectraClassificationModel, BertClassificationModel, BigBirdClassificationModel, KRElectraLstmClassifier, BertLstmClassifier, BigBirdLstmClassifier,BertLstm3Classifier,BertLstm2Classifier,KrelectraLstm2Classifier, BigBirdLstm2Classifier
 from transformers import BertTokenizer, BertForSequenceClassification, AdamW, BertConfig
 
 def generate_data_loader(file_path, tokenizer, args):
     def get_input_ids(data): #input : list - str
+        #document_preprocessed = [preprocess(str(s)) for s in data] #해시태그 워드 제거
         document_bert = ["[CLS] " + str(s) + " [SEP]" for s in data]
         tokenized_texts = [tokenizer.tokenize(s) for s in document_bert]
         input_ids = [tokenizer.convert_tokens_to_ids(x) for x in tokenized_texts]
@@ -63,7 +64,7 @@ def bind_nsml(model, args=None):
 
     def infer(file_path, **kwargs):
         print('start inference')
-        tokenizer = ElectraTokenizer.from_pretrained("snunlp/KR-ELECTRA-discriminator")
+        tokenizer = BertTokenizer.from_pretrained("kykim/bert-kor-base")
         test_dataloader = generate_data_loader(file_path, tokenizer, args)
         results, _ = predict(model, args, test_dataloader)
         return results
@@ -96,21 +97,20 @@ if __name__ == '__main__':
 
     # model load
     #model = KRElectraClassificationModel(args, embed_dim=768, num_labels=2)
-    model = KRElectraLstmClassifier(
+    model = BertLstm2Classifier(
                         hidden_size=64,  #128 or 64
                         output_size=2,  #loss function 바꿔서 output_size=1
                         embed_dim=768,
                         num_layers=3, 
                         batch_first=True, 
-                        bidirectional=True,
-                        maxlen = args.maxlen)
-    model.to(args.device)
+                        bidirectional=True)
+    #model.to(args.device)
     bind_nsml(model, args=args)
 
     #추가 학습
-    #nsml.load(checkpoint='3', session='KR96327/airush2022-1-2a/24')
-    #nsml.save('saved')
-    #model.to(args.device)
+    nsml.load(checkpoint='3', session='KR96327/airush2022-1-2a/208')
+    nsml.save('saved')
+    model.to(args.device)
     print("모델 로드 완료")
 
     # test mode
@@ -119,7 +119,7 @@ if __name__ == '__main__':
 
     # train mode
     if args.mode == "train":
-        tokenizer = ElectraTokenizer.from_pretrained("snunlp/KR-ELECTRA-discriminator")
+        tokenizer = BertTokenizer.from_pretrained("kykim/bert-kor-base")
         #tokenizer = BertTokenizer.from_pretrained('bert-base-multilingual-cased', do_lower_case=False)
         train_dataloader = generate_data_loader(args.train_path, tokenizer, args)
         validation_dataloader = generate_data_loader(args.valid_path, tokenizer, args)
@@ -142,7 +142,14 @@ if __name__ == '__main__':
         mixed_df.to_csv(f'{folder_path}/mixed_data.csv', index=False)
         nsml.save_folder('mixed_data', folder_path)
 
-        
+      # train mode
+    if args.mode == "train_two_stages":
+        tokenizer = BertTokenizer.from_pretrained("kykim/bert-kor-base")
+        #tokenizer = BertTokenizer.from_pretrained('bert-base-multilingual-cased', do_lower_case=False)
+        train_dataloader = generate_data_loader(args.train_path, tokenizer, args)
+        validation_dataloader = generate_data_loader(args.valid_path, tokenizer, args)
+        train(model, args, train_dataloader, validation_dataloader)
+        train_2(model, args, train_dataloader, validation_dataloader)
         
         
         

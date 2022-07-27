@@ -10,6 +10,7 @@ import pandas as pd
 from sklearn.metrics import confusion_matrix
 from torch import nn
 from util import FocalLoss
+from tqdm import tqdm
 
 
 def flat_accuracy(preds, labels):
@@ -47,9 +48,9 @@ def predict(model, args, data_loader):
     return predict_labels, np.mean(eval_accuracy)
 
 def train(model, args, train_loader, valid_loader):
-    #criterion = FocalLoss()
-    class_weights=torch.tensor([1,0.03],dtype=torch.float,device=args.device)
-    criterion = nn.CrossEntropyLoss(weight=class_weights, reduction='mean')
+    criterion = FocalLoss()
+    #class_weights=torch.tensor([1,0.03],dtype=torch.float,device=args.device)
+    #criterion = nn.CrossEntropyLoss(weight=class_weights, reduction='mean')
     optimizer = AdamW(model.parameters(),
                       lr=args.lr,
                       eps=args.eps,
@@ -71,7 +72,7 @@ def train(model, args, train_loader, valid_loader):
     for epoch in range(args.epochs):
         model.train()
         train_loss = []
-        for step, batch in enumerate(train_loader):
+        for step, batch in enumerate(tqdm(train_loader)):
             model.zero_grad()
             batch = tuple(t.to(args.device) for t in batch)
             b_input_ids, b_input_mask, b_labels = batch
@@ -79,8 +80,6 @@ def train(model, args, train_loader, valid_loader):
                             token_type_ids=None,
                             attention_mask=b_input_mask,
                             labels=b_labels)
-            
-            
             loss = criterion(logits,b_labels)
             train_loss.append(loss.item())
             loss.backward()
@@ -106,3 +105,51 @@ def train(model, args, train_loader, valid_loader):
         
         nsml.save(epoch)
     return model
+
+def train_2(model, args, train_loader, valid_loader):
+    #class_weights=torch.tensor([1,0.05],dtype=torch.float,device=args.device)
+    #criterion = nn.CrossEntropyLoss(weight=class_weights, reduction='mean')
+    criterion = FocalLoss()
+    optimizer = AdamW(model.parameters(),
+                      lr=args.lr,
+                      eps=args.eps,
+                      weight_decay = args.wd
+                      )
+    total_steps = len(train_loader) * args.epochs
+
+    scheduler = get_linear_schedule_with_warmup(optimizer,
+                                                num_warmup_steps=args.warmup, 
+                                                num_training_steps=total_steps)
+
+    seed_val = 42
+    random.seed(seed_val)
+    np.random.seed(seed_val)
+    torch.manual_seed(seed_val)
+    torch.cuda.manual_seed_all(seed_val)
+    
+    for param in model.parameters():
+        param.requires_grad = False
+    for param in model.lstm.parameters():
+        param.requires_grad = True
+    for param in model.linear.parameters():
+        param.requires_grad = True
+
+    print('start training')
+    for epoch in range(args.epochs):
+        model.train()
+        train_loss = []
+        for step, batch in enumerate(tqdm(train_loader)):
+            model.zero_grad()
+            batch = tuple(t.to(args.device) for t in batch)
+            b_input_ids, b_input_mask, b_labels = batch
+            logits = model(b_input_ids,
+                            token_type_ids=None,
+                            attention_mask=b_input_mask,
+                            labels=b_labels)
+            
+            loss = criterion(logits,b_labels)
+            train_loss.append(loss.item())
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            optimizer.step()
+            scheduler.step()
