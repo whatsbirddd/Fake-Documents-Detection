@@ -17,4 +17,4 @@
 
 🍇 보완할 점 : 불균형이 굉장히 심해 학습 방법에 대한 고려가 필요했음. 배치 때마다 엉터리 문서와 정상 문서의 비율을 맞춰서 학습시켰을 때 스코어가 올랐음(0.93이상)
 
-- 날 것 그대로의 실험 과정 : [experiment](https://www.notion.so/experiment-7183846785c448b981780963f5fc528b)
+🌷 날 것 그대로의 실험 과정 : [experiment](https://www.notion.so/experiment-7183846785c448b981780963f5fc528b)
